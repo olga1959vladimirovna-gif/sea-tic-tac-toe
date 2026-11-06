@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🐠 Морские крестики-нолики</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    font-family:'Nunito',system-ui,-apple-system,sans-serif;
+    background:linear-gradient(180deg,#f4fdff 0%,#d5f4fd 35%,#abe7f9 70%,#8bdcf3 100%);
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    overflow:hidden;position:relative;padding:14px;
+    -webkit-tap-highlight-color:transparent;user-select:none;
+  }
+
+  /* ---------- ФОН: пузырьки, рыбки, волны ---------- */
+  #bubbles{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0;}
+  .bubble{
+    position:absolute;bottom:-120px;border-radius:50%;
+    background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.95),rgba(255,255,255,.25) 45%,rgba(150,225,245,.35) 100%);
+    border:1px solid rgba(255,255,255,.8);
+    box-shadow:inset -2px -3px 6px rgba(120,200,225,.25);
+    animation:rise linear infinite;
+  }
+  @keyframes rise{
+    0%{transform:translate3d(0,0,0) scale(.8);opacity:0;}
+    8%{opacity:.85;}
+    85%{opacity:.7;}
+    100%{transform:translate3d(28px,-115vh,0) scale(1.15);opacity:0;}
+  }
+
+  .fish{
+    position:fixed;left:-12vw;top:var(--top,20%);
+    font-size:var(--size,26px);opacity:.45;z-index:0;pointer-events:none;
+    animation:swim var(--dur,30s) linear infinite;
+    animation-delay:var(--delay,0s);
+  }
+  @keyframes swim{
+    0%{transform:translateX(-12vw) translateY(0) rotate(0deg);}
+    50%{transform:translateX(52vw) translateY(-16px) rotate(-4deg);}
+    100%{transform:translateX(118vw) translateY(0) rotate(0deg);}
+  }
+
+  .waves{position:fixed;left:0;right:0;bottom:0;height:130px;z-index:0;pointer-events:none;overflow:hidden;}
+  .wave-track{position:absolute;bottom:0;left:0;width:200%;height:100%;display:flex;}
+  .wave-track svg{width:50%;height:100%;flex:none;}
+  .w1{fill:rgba(255,255,255,.5);animation:waveMove 20s linear infinite;}
+  .w2{fill:rgba(255,255,255,.32);animation:waveMove 32s linear infinite reverse;}
+  @keyframes waveMove{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+
+  /* ---------- КАРТОЧКА ---------- */
+  .game{
+    position:relative;z-index:2;
+    width:min(100%,440px);
+    background:rgba(255,255,255,.55);
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    border:1px solid rgba(255,255,255,.85);
+    border-radius:32px;padding:20px;
+    box-shadow:0 22px 55px rgba(0,120,160,.22),inset 0 1px 0 rgba(255,255,255,.95);
+  }
+
+  .header{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+  .spacer{width:38px;flex:none;}
+  h1{
+    flex:1;text-align:center;font-family:'Fredoka',sans-serif;font-weight:600;
+    font-size:clamp(1.15rem,4.6vw,1.55rem);color:#0b7d9e;
+    text-shadow:0 2px 0 rgba(255,255,255,.9);letter-spacing:.3px;line-height:1.2;
+  }
+  .sound-btn{
+    width:38px;height:38px;flex:none;border:none;border-radius:50%;cursor:pointer;
+    background:rgba(255,255,255,.85);font-size:1.05rem;
+    box-shadow:0 3px 10px rgba(0,120,160,.18);transition:transform .15s;
+  }
+  .sound-btn:hover{transform:scale(1.08);}
+  .sound-btn:active{transform:scale(.94);}
+
+  /* ---------- РЕЖИМЫ ---------- */
+  .modes{
+    display:flex;gap:6px;padding:5px;border-radius:16px;
+    background:rgba(255,255,255,.5);margin-bottom:12px;
+    box-shadow:inset 0 1px 4px rgba(0,120,160,.08);
+  }
+  .mode{
+    flex:1;border:none;background:transparent;cursor:pointer;font-family:inherit;
+    font-weight:800;font-size:.82rem;color:#4a8fa3;padding:9px 4px;border-radius:12px;
+    transition:.25s;
+  }
+  .mode.active{background:#fff;color:#0b7d9e;box-shadow:0 3px 10px rgba(0,120,160,.16);}
+  .mode:active{transform:scale(.97);}
+
+  /* ---------- СЧЁТ ---------- */
+  .scores{display:flex;gap:10px;margin-bottom:10px;}
+  .player{
+    flex:1;display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:18px;
+    background:rgba(255,255,255,.55);border:2px solid transparent;
+    transition:transform .25s,border-color .25s,box-shadow .25s,background .25s;
+  }
+  .player.active{
+    border-color:#4ad0ec;background:#fff;transform:translateY(-2px);
+    box-shadow:0 8px 20px rgba(56,198,232,.35);
+  }
+  .player .emoji{font-size:1.5rem;line-height:1;}
+  .player .info{display:flex;flex-direction:column;line-height:1.1;min-width:0;}
+  .player .name{font-size:.72rem;font-weight:800;color:#5a94a6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .player .pts{font-size:1.15rem;font-weight:900;color:#0b7d9e;}
+
+  /* ---------- СТАТУС ---------- */
+  .status{
+    text-align:center;font-weight:800;font-size:.92rem;color:#0b7d9e;
+    min-height:1.5em;margin-bottom:10px;transition:opacity .2s;
+  }
+
+  /* ---------- ПОЛЕ ---------- */
+  .board{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:9px;aspect-ratio:1;
+    padding:10px;border-radius:26px;background:rgba(255,255,255,.32);
+    box-shadow:inset 0 2px 14px rgba(0,120,160,.13);margin-bottom:14px;
+  }
+  .cell{
+    border:none;border-radius:18px;background:rgba(255,255,255,.8);
+    display:grid;place-items:center;cursor:pointer;
+    font-family:inherit;font-size:clamp(2rem,10vw,3rem);line-height:1;
+    box-shadow:0 4px 0 rgba(158,216,234,.6),0 7px 14px rgba(0,120,160,.1);
+    transition:transform .15s,box-shadow .2s,background .25s;
+  }
+  .cell:hover:not(.taken){transform:translateY(-3px);background:#fff;box-shadow:0 7px 0 rgba(158,216,234,.6),0 12px 20px rgba(0,120,160,.15);}
+  .cell:active:not(.taken){transform:translateY(1px);box-shadow:0 2px 0 rgba(158,216,234,.6);}
+  .cell.taken{cursor:default;}
+  .cell.x-cell{background:rgba(235,229,255,.9);}
+  .cell.o-cell{background:rgba(255,241,215,.95);}
+  .mark{display:block;animation:pop .38s cubic-bezier(.34,1.56,.64,1);}
+  @keyframes pop{
+    0%{transform:scale(0) rotate(-45deg);opacity:0;}
+    100%{transform:scale(1) rotate(0);opacity:1;}
+  }
+  .cell.win{
+    background:linear-gradient(160deg,#fff9dd,#ffe9a3);
+    box-shadow:0 0 0 4px #ffd166,0 0 26px rgba(255,209,102,.95);
+    animation:winPulse 1s ease-in-out infinite;
+  }
+  @keyframes winPulse{
+    0%,100%{transform:scale(1);}
+    50%{transform:scale(1.06);}
+  }
+
+  /* ---------- НИЗ ---------- */
+  .bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .draws{font-size:.82rem;font-weight:800;color:#5a94a6;}
+  .draws b{color:#0b7d9e;font-size:.95rem;}
+
+  .btn{
+    border:none;cursor:pointer;font-family:inherit;font-weight:900;font-size:.9rem;
+    padding:12px 18px;border-radius:16px;color:#fff;
+    background:linear-gradient(180deg,#5fd7f0,#2bb6d8);
+    box-shadow:0 4px 0 #1a92b0,0 8px 18px rgba(43,182,216,.35);
+    transition:transform .12s,box-shadow .12s;
+  }
+  .btn:hover{transform:translateY(-2px);box-shadow:0 6px 0 #1a92b0,0 12px 22px rgba(43,182,216,.4);}
+  .btn:active{transform:translateY(2px);box-shadow:0 2px 0 #1a92b0;}
+
+  /* ---------- РЕЗУЛЬТАТ ---------- */
+  .result{
+    position:absolute;inset:0;z-index:5;display:grid;place-items:center;
+    background:rgba(240,252,255,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    border-radius:32px;opacity:0;pointer-events:none;transition:opacity .3s;
+  }
+  .result.show{opacity:1;pointer-events:auto;}
+  .result-card{text-align:center;padding:22px;animation:popIn .45s cubic-bezier(.34,1.56,.64,1);}
+  @keyframes popIn{0%{transform:scale(.6);opacity:0;}100%{transform:scale(1);opacity:1;}}
+  .result-emoji{font-size:3.6rem;line-height:1;margin-bottom:6px;animation:bob 1.6s ease-in-out infinite;}
+  @keyframes bob{0%,100%{transform:translateY(0) rotate(-4deg);}50%{transform:translateY(-9px) rotate(4deg);}}
+  .result-title{font-family:'Fredoka',sans-serif;font-size:1.6rem;color:#0b7d9e;margin-bottom:4px;}
+  .result-sub{font-size:.88rem;font-weight:800;color:#5a94a6;margin-bottom:18px;max-width:230px;}
+
+  .confetti{
+    position:absolute;z-index:20;pointer-events:none;font-size:1.15rem;
+    animation:fly 1.5s ease-out forwards;
+  }
+  @keyframes fly{
+    0%{transform:translate(0,0) scale(.4) rotate(0);opacity:1;}
+    100%{transform:translate(var(--dx),var(--dy)) scale(1.2) rotate(var(--rot));opacity:0;}
+  }
+
+  @media (max-width:380px){
+    .game{padding:16px;border-radius:26px;}
+    .player .name{font-size:.66rem;}
+    .btn{font-size:.82rem;padding:11px 14px;}
+  }
+</style>
+</head>
+<body>
+
+<div id="bubbles"></div>
+
+<div class="fish" style="--top:12%;--dur:34s;--delay:-6s;--size:26px;">🐠</div>
+<div class="fish" style="--top:72%;--dur:44s;--delay:-22s;--size:22px;">🐡</div>
+<div class="fish" style="--top:38%;--dur:52s;--delay:-38s;--size:18px;">🐟</div>
+<div class="fish" style="--top:88%;--dur:38s;--delay:-14s;--size:24px;">🦀</div>
+
+<div class="waves">
+  <div class="wave-track">
+    <svg viewBox="0 0 1440 120" preserveAspectRatio="none" class="w2">
+      <path d="M0,70 C240,26 480,26 720,70 C960,114 1200,114 1440,70 L1440,120 L0,120 Z"/>
+    </svg>
+    <svg viewBox="0 0 1440 120" preserveAspectRatio="none" class="w2">
+      <path d="M0,70 C240,26 480,26 720,70 C960,114 1200,114 1440,70 L1440,120 L0,120 Z"/>
+    </svg>
+  </div>
+  <div class="wave-track">
+    <svg viewBox="0 0 1440 120" preserveAspectRatio="none" class="w1">
+      <path d="M0,70 C240,26 480,26 720,70 C960,114 1200,114 1440,70 L1440,120 L0,120 Z"/>
+    </svg>
+    <svg viewBox="0 0 1440 120" preserveAspectRatio="none" class="w1">
+      <path d="M0,70 C240,26 480,26 720,70 C960,114 1200,114 1440,70 L1440,120 L0,120 Z"/>
+    </svg>
+  </div>
+</div>
+
+<main class="game">
+  <div class="header">
+    <div class="spacer"></div>
+    <h1>Морские крестики-нолики</h1>
+    <button class="sound-btn" id="soundBtn" title="Звук">🔊</button>
+  </div>
+
+  <div class="modes">
+    <button class="mode active" data-mode="pvp">👫 Вдвоём</button>
+    <button class="mode" data-mode="pvc">🤖 С роботом</button>
+  </div>
+
+  <div class="scores">
+    <div class="player active" id="playerX">
+      <div class="emoji">🐙</div>
+      <div class="info">
+        <div class="name" id="nameX">Игрок 1</div>
+        <div class="pts" id="scoreX">0</div>
+      </div>
+    </div>
+    <div class="player" id="playerO">
+      <div class="emoji">🐠</div>
+      <div class="info">
+        <div class="name" id="nameO">Игрок 2</div>
+        <div class="pts" id="scoreO">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status" id="status">Ходит 🐙 Игрок 1</div>
+
+  <div class="board" id="board"></div>
+
+  <div class="bottom">
+    <div class="draws">🌊 Ничьих: <b id="scoreD">0</b></div>
+    <button class="btn" id="resetBtn">🔄 Новый раунд</button>
+  </div>
+
+  <div class="result" id="result">
+    <div class="result-card">
+      <div class="result-emoji" id="resultEmoji">🏆</div>
+      <div class="result-title" id="resultTitle">Победа!</div>
+      <div class="result-sub" id="resultSub"></div>
+      <button class="btn" id="playAgain">Играть снова</button>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- Константы ---------- */
+  const WIN_LINES = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6]
+  ];
+  const MARKS = { X: '🐙', O: '🐠' };
+
+  /* ---------- DOM ---------- */
+  const boardEl      = document.getElementById('board');
+  const statusEl     = document.getElementById('status');
+  const playerXEl    = document.getElementById('playerX');
+  const playerOEl    = document.getElementById('playerO');
+  const nameXEl      = document.getElementById('nameX');
+  const nameOEl      = document.getElementById('nameO');
+  const scoreXEl     = document.getElementById('scoreX');
+  const scoreOEl     = document.getElementById('scoreO');
+  const scoreDEl     = document.getElementById('scoreD');
+  const resultEl     = document.getElementById('result');
+  const resultEmojiEl= document.getElementById('resultEmoji');
+  const resultTitleEl= document.getElementById('resultTitle');
+  const resultSubEl  = document.getElementById('resultSub');
+  const gameEl       = document.querySelector('.game');
+  const soundBtn     = document.getElementById('soundBtn');
+
+  /* ---------- Состояние ---------- */
+  let board   = Array(9).fill(null);
+  let current = 'X';
+  let gameOver = false;
+  let lock = false;              // блокировка кликов во время хода робота
+  let mode = 'pvp';              // 'pvp' | 'pvc'
+  let scores = { X: 0, O: 0, D: 0 };
+  let soundOn = true;
+  let audioCtx = null;
+
+  /* ---------- Создаём клетки ---------- */
+  const cells = [];
+  for (let i = 0; i < 9; i++) {
+    const b = document.createElement('button');
+    b.className = 'cell';
+    b.type = 'button';
+    b.setAttribute('aria-label', 'Клетка ' + (i + 1));
+    b.addEventListener('click', () => handleClick(i));
+    boardEl.appendChild(b);
+    cells.push(b);
+  }
+
+  /* ---------- Звук ---------- */
+  function beep(freq, dur = 0.12, type = 'sine', vol = 0.07) {
+    if (!soundOn) return;
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(vol, audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + dur);
+    } catch (e) { /* тишина */ }
+  }
+
+  function playWinSound() {
+    if (!soundOn) return;
+    [523, 659, 784, 1047].forEach((f, i) =>
+      setTimeout(() => beep(f, 0.18, 'triangle', 0.08), i * 110)
+    );
+  }
+
+  soundBtn.addEventListener('click', () => {
+    soundOn = !soundOn;
+    soundBtn.textContent = soundOn ? '🔊' : '🔇';
+    if (soundOn) beep(660, 0.1, 'triangle');
+  });
+
+  /* ---------- Игровая логика ---------- */
+  function handleClick(i) {
+    if (gameOver || lock || board[i]) return;
+    if (mode === 'pvc' && current === 'O') return;
+    makeMove(i, current);
+  }
+
+  function makeMove(i, mark) {
+    board[i] = mark;
+    paintCell(i, mark);
+    beep(mark === 'X' ? 523 : 659, 0.1, 'triangle');
+
+    const win = getWinner(board);
+    if (win) { finish(win.mark, win.line); return; }
+    if (board.every(Boolean)) { finish(null, null); return; }
+
+    current = mark === 'X' ? 'O' : 'X';
+    updateTurn();
+
+    if (mode === 'pvc' && current === 'O') scheduleRobot();
+  }
+
+  function paintCell(i, mark) {
+    const c = cells[i];
+    c.classList.add('taken', mark === 'X' ? 'x-cell' : 'o-cell');
+    c.innerHTML = '<span class="mark">' + MARKS[mark] + '</span>';
+  }
+
+  function getWinner(b) {
+    for (const line of WIN_LINES) {
+      const [a, c, d] = line;
+      if (b[a] && b[a] === b[c] && b[a] === b[d]) {
+        return { mark: b[a], line };
+      }
+    }
+    return null;
+  }
+
+  function finish(winner, line) {
+    gameOver = true;
+    playerXEl.classList.remove('active');
+    playerOEl.classList.remove('active');
+
+    if (winner) {
+      line.forEach(i => cells[i].classList.add('win'));
+      scores[winner]++;
+      updateScores();
+      playWinSound();
+      celebrate();
+      showResult(winner);
+    } else {
+      scores.D++;
+      updateScores();
+      beep(330, 0.28, 'sine', 0.06);
+      setTimeout(() => beep(262, 0.32, 'sine', 0.06), 150);
+      showResult(null);
+    }
+    statusEl.textContent = 'Раунд окончен 🌊';
+  }
+
+  function updateTurn() {
+    if (gameOver) return;
+    playerXEl.classList.toggle('active', current === 'X');
+    playerOEl.classList.toggle('active', current === 'O');
+
+    if (mode === 'pvc') {
+      statusEl.textContent = current === 'X' ? 'Твой ход! 🐙' : 'Робот думает… 🤖';
+    } else {
+      statusEl.textContent = current === 'X' ? 'Ходит 🐙 Игрок 1' : 'Ходит 🐠 Игрок 2';
+    }
+  }
+
+  function updateScores() {
+    scoreXEl.textContent = scores.X;
+    scoreOEl.textContent = scores.O;
+    scoreDEl.textContent = scores.D;
+  }
+
+  function updateNames() {
+    nameXEl.textContent = mode === 'pvc' ? 'Ты' : 'Игрок 1';
+    nameOEl.textContent = mode === 'pvc' ? 'Робот' : 'Игрок 2';
+  }
+
+  /* ---------- Робот ---------- */
+  function scheduleRobot() {
+    lock = true;
+    setTimeout(() => {
+      if (gameOver) { lock = false; return; }
+      const idx = robotMove();
+      lock = false;
+      if (!gameOver && idx != null && board[idx] === null) makeMove(idx, 'O');
+    }, 520);
+  }
+
+  function robotMove() {
+    const empties = [];
+    for (let i = 0; i < 9; i++) if (!board[i]) empties.push(i);
+    if (!empties.length) return null;
+
+    // Немного «человечности»: иногда робот ошибается — детям интереснее играть
+    if (Math.random() < 0.18) {
+      return empties[Math.floor(Math.random() * empties.length)];
+    }
+    const res = minimax(board.slice(), 'O', 0);
+    return res.index != null ? res.index : empties[0];
+  }
+
+  function minimax(b, player, depth) {
+    const w = getWinner(b);
+    if (w) return { score: w.mark === 'O' ? 10 - depth : depth - 10 };
+
+    const empties = [];
+    for (let i = 0; i < 9; i++) if (!b[i]) empties.push(i);
+    if (!empties.length) return { score: 0 };
+
+    let bestScore = player === 'O' ? -Infinity : Infinity;
+    let bestIndex = empties[0];
+
+    for (const i of empties) {
+      b[i] = player;
+      const { score } = minimax(b, player === 'O' ? 'X' : 'O', depth + 1);
+      b[i] = null;
+      if (player === 'O' ? score > bestScore : score < bestScore) {
+        bestScore = score;
+        bestIndex = i;
+      }
+    }
+    return { score: bestScore, index: bestIndex };
+  }
+
+  /* ---------- Результат ---------- */
+  function showResult(winner) {
+    let emoji, title, sub;
+    if (winner === 'X') {
+      emoji = '🏆';
+      title = mode === 'pvc' ? 'Ты победил!' : 'Победил Игрок 1!';
+      sub = 'Осьминог 🐙 собрал все жемчужины!';
+    } else if (winner === 'O') {
+      emoji = '🏆';
+      title = mode === 'pvc' ? 'Робот победил 🤖' : 'Победил Игрок 2!';
+      sub = 'Рыбка 🐠 проплыла быстрее всех!';
+    } else {
+      emoji = '🤝';
+      title = 'Ничья!';
+      sub = 'Оба пловца финишировали вместе 🌊';
+    }
+    resultEmojiEl.textContent = emoji;
+    resultTitleEl.textContent = title;
+    resultSubEl.textContent = sub;
+    resultEl.classList.add('show');
+  }
+
+  function celebrate() {
+    const items = ['🐠','🫧','⭐','🐚','🐙','✨','💙','🐟'];
+    for (let i = 0; i < 18; i++) {
+      const p = document.createElement('div');
+      p.className = 'confetti';
+      p.textContent = items[Math.floor(Math.random() * items.length)];
+      p.style.left = (25 + Math.random() * 50) + '%';
+      p.style.top = '42%';
+      p.style.setProperty('--dx', (Math.random() * 2 - 1) * 190 + 'px');
+      p.style.setProperty('--dy', (-130 - Math.random() * 180) + 'px');
+      p.style.setProperty('--rot', (Math.random() * 720 - 360) + 'deg');
+      p.style.animationDelay = (Math.random() * 0.18) + 's';
+      gameEl.appendChild(p);
+      setTimeout(() => p.remove(), 1900);
+    }
+  }
+
+  /* ---------- Новая игра ---------- */
+  function newGame() {
+    board = Array(9).fill(null);
+    current = 'X';
+    gameOver = false;
+    lock = false;
+    cells.forEach(c => { c.className = 'cell'; c.innerHTML = ''; });
+    resultEl.classList.remove('show');
+    updateNames();
+    updateScores();
+    updateTurn();
+  }
+
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    beep(440, 0.09, 'sine');
+    newGame();
+  });
+  document.getElementById('playAgain').addEventListener('click', () => {
+    beep(520, 0.09, 'sine');
+    newGame();
+  });
+
+  /* ---------- Переключение режима ---------- */
+  document.querySelectorAll('.mode').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (mode === btn.dataset.mode) return;
+      document.querySelectorAll('.mode').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      mode = btn.dataset.mode;
+      scores = { X: 0, O: 0, D: 0 };
+      beep(700, 0.09, 'triangle');
+      newGame();
+    });
+  });
+
+  /* ---------- Фон: пузырьки ---------- */
+  (function createBubbles() {
+    const wrap = document.getElementById('bubbles');
+    for (let i = 0; i < 20; i++) {
+      const b = document.createElement('div');
+      b.className = 'bubble';
+      const size = 6 + Math.random() * 26;
+      b.style.width = b.style.height = size + 'px';
+      b.style.left = Math.random() * 100 + '%';
+      b.style.animationDuration = (9 + Math.random() * 11) + 's';
+      b.style.animationDelay = (-Math.random() * 20) + 's';
+      wrap.appendChild(b);
+    }
+  })();
+
+  /* ---------- Старт ---------- */
+  newGame();
+})();
+</script>
+</body>
+</html>
